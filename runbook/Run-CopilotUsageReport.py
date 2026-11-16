@@ -64,6 +64,25 @@ def get_token() -> str:
     token = res.json().get("access_token")
     if not token:
         raise RuntimeError("Managed Identity endpoint did not return an access_token.")
+
+    try:
+        parts = token.split(".")
+        if len(parts) >= 2:
+            payload = parts[1]
+            padded = payload + "=" * (-len(payload) % 4)
+            claims = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
+            roles = claims.get("roles", [])
+            appid = claims.get("appid", "unknown")
+            logger.info(f"Managed Identity Token Claims -> AppId: {appid}, Roles: {roles}")
+            if "Reports.Read.All" not in roles:
+                logger.warning(
+                    f"Reports.Read.All permission not found in current token roles ({roles}). "
+                    "Azure Managed Identity endpoint may still be returning a cached token. "
+                    "Cache TTL usually clears within 30-60 minutes."
+                )
+    except Exception as parse_err:
+        logger.debug(f"Could not parse token claims: {parse_err}")
+
     return token
 
 
