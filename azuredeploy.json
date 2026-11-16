@@ -1,0 +1,119 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "type": "string",
+      "defaultValue": "copilotrep",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Base name used to derive resource names, e.g. copilotrep => aa-copilotrep, rb-copilotrep-report"
+      }
+    },
+    "reportPeriod": {
+      "type": "string",
+      "defaultValue": "D28",
+      "allowedValues": [
+        "D7",
+        "D28",
+        "D90",
+        "D180"
+      ],
+      "metadata": {
+        "description": "Telemetry aggregation window: D7, D28, D90, D180"
+      }
+    },
+    "mailSender": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Sender mailbox address (UPN) for dispatching reports via Microsoft Graph sendMail"
+      }
+    },
+    "mailRecipients": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Comma-separated list of recipient email addresses"
+      }
+    },
+    "mailSubject": {
+      "type": "string",
+      "defaultValue": "Microsoft 365 Copilot Adoption & Usage Report",
+      "metadata": {
+        "description": "Subject line for the report email"
+      }
+    },
+    "scheduleFrequency": {
+      "type": "string",
+      "defaultValue": "Week",
+      "allowedValues": [
+        "Week",
+        "Day"
+      ],
+      "metadata": {
+        "description": "Report delivery schedule: Week (every Monday at 08:00 UTC) or Day"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2022-09-01",
+      "name": "copilotUsageAutomationMain",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "relativePath": "infra/main.json"
+        },
+        "parameters": {
+          "baseName": {
+            "value": "[parameters('baseName')]"
+          },
+          "reportPeriod": {
+            "value": "[parameters('reportPeriod')]"
+          },
+          "mailSender": {
+            "value": "[parameters('mailSender')]"
+          },
+          "mailRecipients": {
+            "value": "[parameters('mailRecipients')]"
+          },
+          "mailSubject": {
+            "value": "[parameters('mailSubject')]"
+          },
+          "scheduleFrequency": {
+            "value": "[parameters('scheduleFrequency')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "automationAccountResourceId": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.automationAccountResourceId.value]"
+    },
+    "automationAccountName": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.automationAccountName.value]"
+    },
+    "automationPrincipalId": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.automationPrincipalId.value]"
+    },
+    "runbookName": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.runbookName.value]"
+    },
+    "scheduleName": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.scheduleName.value]"
+    },
+    "scheduleResourceId": {
+      "type": "string",
+      "value": "[reference('copilotUsageAutomationMain').outputs.scheduleResourceId.value]"
+    }
+  }
+}

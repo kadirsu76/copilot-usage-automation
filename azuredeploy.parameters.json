@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": {
+      "value": "copilotrep"
+    },
+    "reportPeriod": {
+      "value": "D28"
+    },
+    "mailSender": {
+      "value": ""
+    },
+    "mailRecipients": {
+      "value": ""
+    },
+    "mailSubject": {
+      "value": "Microsoft 365 Copilot Adoption & Usage Report"
+    },
+    "scheduleFrequency": {
+      "value": "Week"
+    }
+  }
+}
