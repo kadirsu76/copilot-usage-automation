@@ -9,13 +9,13 @@ from typing import List, Dict, Any
 
 def generate_mock_copilot_users(count: int = 45) -> List[Dict[str, Any]]:
     first_names = [
-        "Ahmet", "Mehmet", "Mustafa", "Ali", "Can", "Burak", "Emre", "Onur", "Kadir",
-        "Ayşe", "Fatma", "Zeynep", "Elif", "Selin", "Deniz", "Ece", "Melis", "Gamze",
-        "Kerem", "Barış", "Serkan", "Volkan", "Tolga", "Banu", "Aslı", "Gizem", "İrem"
+        "Alex", "Jordan", "Taylor", "Morgan", "Sam", "Chris", "Pat", "Casey", "Jamie",
+        "Emma", "Liam", "Olivia", "Noah", "Sophia", "Lucas", "Ava", "Mason", "Isabella",
+        "Ethan", "Mia", "James", "Harper", "Benjamin", "Evelyn", "Daniel", "Chloe", "Michael"
     ]
     last_names = [
-        "Yılmaz", "Kaya", "Demir", "Şahin", "Çelik", "Yıldız", "Öztürk", "Aydın", "Özdemir",
-        "Arslan", "Doğan", "Kılıç", "Aslan", "Çetin", "Kara", "Koç", "Kurt", "Özkan", "Şimşek"
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson", "Anderson",
+        "Taylor", "Thomas", "Moore", "Jackson", "Martin", "Lee", "Perez", "Thompson", "White", "Harris"
     ]
 
     now = datetime.now()

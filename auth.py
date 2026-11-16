@@ -25,14 +25,14 @@ def get_graph_access_token() -> str:
     """
     # 1. Try Azure Automation Managed Identity if environment variables are set
     if config.IDENTITY_ENDPOINT and config.IDENTITY_HEADER:
-        logger.info("Azure Automation Managed Identity ortamı tespit edildi. Token alınıyor...")
+        logger.info("Azure Automation Managed Identity detected. Acquiring token...")
         try:
             token = _get_token_via_azure_automation_identity()
             if token:
-                logger.info("Managed Identity ile Graph token başarıyla alındı.")
+                logger.info("Token acquired successfully via Managed Identity.")
                 return token
         except Exception as e:
-            logger.warning(f"Managed Identity ile token alınamadı: {e}. Diğer yöntemler deneniyor...")
+            logger.warning(f"Could not acquire token via Managed Identity: {e}. Trying alternative methods...")
 
     # 2. Try IMDS Managed Identity (e.g. Azure VM / Container) if available
     if os.getenv("AZURE_USE_IMDS", "false").lower() == "true":
@@ -41,19 +41,19 @@ def get_graph_access_token() -> str:
             if token:
                 return token
         except Exception as e:
-            logger.debug(f"IMDS token denemesi: {e}")
+            logger.debug(f"IMDS token attempt failed: {e}")
 
     # 3. Fallback to Service Principal (Tenant ID, Client ID, Client Secret)
     if config.AZURE_TENANT_ID and config.AZURE_CLIENT_ID and config.AZURE_CLIENT_SECRET:
-        logger.info("Service Principal (Client Secret) ile Graph token alınıyor...")
+        logger.info("Acquiring token via Service Principal (Client Secret)...")
         return _get_token_via_client_credentials()
 
     # If neither is configured
     raise GraphAuthError(
-        "Kimlik doğrulama bilgileri bulunamadı!\n"
-        "Local çalıştırma için lütfen .env dosyasında AZURE_TENANT_ID, AZURE_CLIENT_ID ve AZURE_CLIENT_SECRET tanımlayın.\n"
-        "Azure Automation için ise Runbook'ta Managed Identity'yi aktif edin ve Graph API izinlerini atayın.\n"
-        "Örnek veriyle test etmek için scripti '--mock' parametresiyle çalıştırabilirsiniz."
+        "Authentication credentials not found!\n"
+        "For local execution, please define AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET in .env.\n"
+        "For Azure Automation, enable System-Assigned Managed Identity on the Automation Account and assign Graph permissions.\n"
+        "To test with sample data without credentials, run with '--mock'."
     )
 
 
@@ -76,15 +76,15 @@ def _get_token_via_client_credentials() -> str:
         data = response.json()
         token = data.get("access_token")
         if not token:
-            raise GraphAuthError(f"Token yanıtında 'access_token' bulunamadı: {data}")
+            raise GraphAuthError(f"No 'access_token' in token response: {data}")
         return token
     except requests.exceptions.HTTPError as e:
         err_detail = response.text if "response" in locals() else str(e)
         raise GraphAuthError(
-            f"Service Principal ile token alma başarısız oldu (HTTP {response.status_code}): {err_detail}"
+            f"Failed to acquire token via Service Principal (HTTP {response.status_code}): {err_detail}"
         ) from e
     except requests.exceptions.RequestException as e:
-        raise GraphAuthError(f"Token isteği sırasında ağ hatası oluştu: {e}") from e
+        raise GraphAuthError(f"Network error during token request: {e}") from e
 
 
 def _get_token_via_azure_automation_identity() -> str:
@@ -100,7 +100,7 @@ def _get_token_via_azure_automation_identity() -> str:
     data = response.json()
     token = data.get("access_token")
     if not token:
-        raise GraphAuthError(f"Managed Identity yanıtında 'access_token' bulunamadı: {data}")
+        raise GraphAuthError(f"Managed Identity response did not contain 'access_token': {data}")
     return token
 
 

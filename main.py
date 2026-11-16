@@ -47,30 +47,30 @@ def parse_arguments():
     parser.add_argument(
         "--mock",
         action="store_true",
-        help="Gerçek Graph API çağrısı yapmadan örnek mock verilerle test HTML raporu üretir.",
+        help="Generate report using realistic mock telemetry without calling live Graph API.",
     )
     parser.add_argument(
         "--period",
         type=str,
         default=config.REPORT_PERIOD,
         choices=["D7", "D28", "D30", "D90", "D180"],
-        help="Raporlama dönemi: D7, D28, D30, D90, D180 (Varsayılan: config.py veya D28)",
+        help="Reporting window: D7, D28, D30, D90, D180 (Default: D28)",
     )
     parser.add_argument(
         "--output",
         type=str,
         default=None,
-        help="Oluşturulacak HTML raporunun dosya yolu (Varsayılan: output/copilot_usage_report_YYYYMMDD.html)",
+        help="Destination path for HTML report (Default: output/copilot_usage_report_<period>_<timestamp>.html)",
     )
     parser.add_argument(
         "--send-mail",
         action="store_true",
-        help="Üretilen raporu tanımlı alıcılara e-posta olarak gönderir (Graph API Mail.Send gerektirir).",
+        help="Dispatch generated report to configured recipients via Microsoft Graph sendMail.",
     )
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Ayrıntılı hata ayıklama (DEBUG) loglarını açar.",
+        help="Enable detailed DEBUG logging.",
     )
     return parser.parse_args()
 
@@ -80,8 +80,8 @@ def run():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    logger.info("=== Microsoft 365 Copilot Kullanım Otomasyonu Başlatıldı ===")
-    logger.info(f"Rapor Dönemi: {args.period}")
+    logger.info("=== Microsoft 365 Copilot Usage Automation Initialized ===")
+    logger.info(f"Reporting Window: {args.period}")
 
     token = None
     users = []
@@ -89,37 +89,37 @@ def run():
 
     # 1. Fetch Data (Mock or Live Graph API)
     if args.mock:
-        logger.info("🧪 MOCK MODU AKTİF: 45 adet gerçekçi örnek kullanıcı verisi ve trend üretiliyor...")
+        logger.info("MOCK MODE ACTIVE: Generating 45 realistic sample users and trend points...")
         users = generate_mock_copilot_users(count=45)
         trend = generate_mock_copilot_trend(days=28)
     else:
         try:
-            logger.info("Graph API kimlik doğrulaması yapılıyor...")
+            logger.info("Authenticating to Microsoft Graph API...")
             token = get_graph_access_token()
-            logger.info("Kullanım verileri Graph API'den çekiliyor...")
+            logger.info("Fetching Copilot user activity details from Graph API...")
             users = fetch_copilot_usage_user_detail(token, period=args.period)
-            logger.info("Günlük kullanım ve prompt trendi çekiliyor...")
+            logger.info("Fetching daily active user and prompt trend...")
             trend = fetch_copilot_user_count_trend(token, period=args.period)
         except (GraphAuthError, GraphReportError) as e:
-            logger.error(f"HATA: {e}")
+            logger.error(f"ERROR: {e}")
             sys.exit(1)
         except Exception as e:
-            logger.exception(f"Beklenmeyen bir hata oluştu: {e}")
+            logger.exception(f"Unexpected error encountered: {e}")
             sys.exit(1)
 
     if not users:
-        logger.warning("Herhangi bir kullanıcı kullanım kaydı bulunamadı!")
+        logger.warning("No user activity records found!")
         sys.exit(0)
 
     # 2. Aggregate Metrics & Generate HTML
-    logger.info(f"Toplam {len(users)} kullanıcı ve {len(trend)} günlük trend için metrikler hesaplanıyor...")
+    logger.info(f"Aggregating metrics for {len(users)} users and {len(trend)} trend points...")
     metrics = aggregate_metrics(users, period=args.period, trend=trend)
     logger.info(
-        f"Özet: {metrics['total_users']} Lisanslı | {metrics['active_users']} Aktif "
-        f"({metrics['adoption_rate']}%) | {metrics['inactive_users']} İnaktif"
+        f"Summary: {metrics['total_users']} Assigned | {metrics['active_users']} Active "
+        f"({metrics['adoption_rate']}%) | {metrics['inactive_users']} Inactive"
     )
 
-    logger.info("HTML raporu oluşturuluyor...")
+    logger.info("Generating executive email HTML report...")
     html_content = generate_html_report(metrics)
 
     # 3. Save to Local Output HTML & Excel Files
@@ -144,34 +144,34 @@ def run():
     latest_excel = config.OUTPUT_DIR / "copilot_usage_roster_latest.xlsx"
     generate_excel_roster(users, latest_excel)
 
-    logger.info(f"✅ HTML Raporu ve Excel Listesi başarıyla kaydedildi:")
-    logger.info(f"   📄 HTML: {output_file.resolve()}")
-    logger.info(f"   📊 Excel: {excel_file.resolve()}")
-    logger.info(f"   🌐 Hızlı HTML İnceleme: {latest_file.resolve()}")
-    logger.info(f"   📑 Hızlı Excel İnceleme: {latest_excel.resolve()}")
+    logger.info("HTML Report and Excel Roster successfully generated:")
+    logger.info(f"   HTML:  {output_file.resolve()}")
+    logger.info(f"   Excel: {excel_file.resolve()}")
+    logger.info(f"   Quick HTML Preview:  {latest_file.resolve()}")
+    logger.info(f"   Quick Excel Preview: {latest_excel.resolve()}")
 
     # 4. Optional: Send Email
     if args.send_mail:
-        logger.info("E-posta gönderimi tetiklendi...")
+        logger.info("Email dispatch requested...")
         if args.mock and not token:
             try:
                 # Try acquiring token for sending test mail if configured
                 token = get_graph_access_token()
             except Exception as e:
-                logger.warning(f"Mock modunda mail göndermek için geçerli token alınamadı ({e}). Mail gönderimi atlanıyor.")
+                logger.warning(f"Could not acquire token to send mail in mock mode ({e}). Skipping email dispatch.")
                 return
 
         if token:
             try:
                 send_report_email(token, html_content, attachment_paths=[latest_excel])
-                logger.info("✅ Mail gönderimi tamamlandı.")
+                logger.info("Report email dispatched successfully.")
             except MailerError as e:
-                logger.error(f"Mail gönderimi başarısız: {e}")
+                logger.error(f"Email dispatch failed: {e}")
                 sys.exit(1)
     else:
-        logger.info("ℹ️ Local mod: Mail gönderilmedi (sadece HTML ve Excel üretildi). Mail göndermek için --send-mail ekleyin.")
+        logger.info("Local mode: Email not dispatched (HTML and Excel generated only). Add --send-mail to dispatch.")
 
-    logger.info("=== Otomasyon Tamamlandı ===")
+    logger.info("=== Automation Completed Successfully ===")
 
 
 if __name__ == "__main__":
