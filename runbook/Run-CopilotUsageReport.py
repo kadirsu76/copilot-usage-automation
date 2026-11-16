@@ -25,6 +25,11 @@ try:
 except ImportError:
     pass
 
+try:
+    import automationassets
+except ImportError:
+    automationassets = None
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -32,13 +37,38 @@ logging.basicConfig(
 )
 logger = logging.getLogger("azure_runbook")
 
-raw_period = os.getenv("REPORT_PERIOD", "D28").strip().upper()
+
+def get_automation_var(name: str, fallback: str = "") -> str:
+    """Retrieves an Azure Automation asset variable, falling back to environment variables."""
+    if automationassets:
+        try:
+            val = automationassets.get_automation_variable(name)
+            if val is not None and str(val).strip():
+                clean_val = str(val).strip().strip('"')
+                if clean_val:
+                    return clean_val
+        except Exception as e:
+            logger.debug(f"Could not read automation variable '{name}': {e}")
+
+    candidates = [
+        name,
+        name.replace("CopilotReport-", ""),
+        name.replace("CopilotReport-", "").replace("-", "_").upper(),
+        name.replace("-", "_").upper(),
+    ]
+    for key in candidates:
+        val = os.getenv(key)
+        if val and val.strip():
+            return val.strip().strip('"')
+    return fallback
+
+
+raw_period = get_automation_var("CopilotReport-Period", os.getenv("REPORT_PERIOD", "D28")).strip().upper()
 REPORT_PERIOD = "D28" if raw_period in ["D28", "D30", ""] else raw_period
 
-MAIL_SENDER = os.getenv("MAIL_SENDER", "").strip()
-MAIL_RECIPIENTS = [
-    e.strip() for e in os.getenv("MAIL_RECIPIENTS", "").split(",") if e.strip()
-]
+MAIL_SENDER = get_automation_var("CopilotReport-MailSender", os.getenv("MAIL_SENDER", "")).strip()
+_recipients_raw = get_automation_var("CopilotReport-MailRecipients", os.getenv("MAIL_RECIPIENTS", ""))
+MAIL_RECIPIENTS = [e.strip() for e in _recipients_raw.split(",") if e.strip()]
 
 def get_default_subject() -> str:
     """Returns fixed email subject with current date (no time component)."""
@@ -583,19 +613,28 @@ def send_email(token: str, html_body: str, sender: str = None, recipients: List[
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Azure Automation Copilot Usage Runbook")
-    parser.add_argument("--period", default=REPORT_PERIOD, help="Report period (D7, D28, D90, D180)")
-    parser.add_argument("--sender", default=MAIL_SENDER, help="Sender mailbox UPN")
-    parser.add_argument("--recipients", default=",".join(MAIL_RECIPIENTS), help="Comma-separated recipient emails")
+    parser.add_argument("--period", default=None, help="Report period (D7, D28, D90, D180)")
+    parser.add_argument("--sender", default=None, help="Sender mailbox UPN")
+    parser.add_argument("--recipients", default=None, help="Comma-separated recipient emails")
     args, _ = parser.parse_known_args()
 
-    period = args.period or REPORT_PERIOD
-    sender = args.sender or MAIL_SENDER
-    recipients = [r.strip() for r in (args.recipients or "").split(",") if r.strip()] or MAIL_RECIPIENTS
+    period_var = get_automation_var("CopilotReport-Period", REPORT_PERIOD)
+    sender_var = get_automation_var("CopilotReport-MailSender", MAIL_SENDER)
+    recipients_var = get_automation_var("CopilotReport-MailRecipients", ",".join(MAIL_RECIPIENTS))
+
+    period = args.period or period_var or "D28"
+    if period.upper() in ["D30", ""]:
+        period = "D28"
+    sender = (args.sender or sender_var or "").strip()
+    recipients_str = args.recipients or recipients_var or ""
+    recipients = [r.strip() for r in recipients_str.split(",") if r.strip()]
     subject = get_default_subject()
 
     logger.info("=== Azure Automation Copilot Usage Runbook Initialized ===")
     logger.info("Authentication Mode: Azure System-Assigned Managed Identity (Credential-free)")
     logger.info(f"Report Period: {period}")
+    logger.info(f"Mail Sender: {sender or '(None - Dry Run)'}")
+    logger.info(f"Mail Recipients: {recipients or '(None - Dry Run)'}")
 
     token = get_token()
     users = fetch_report(token, period=period)
@@ -607,9 +646,13 @@ def main():
     attachment = build_audit_attachment(users, period=period)
 
     if sender and recipients:
+        logger.info(f"Dispatching report email from '{sender}' to {recipients}...")
         send_email(token, html_content, sender=sender, recipients=recipients, subject=subject, attachment=attachment)
     else:
-        logger.info("Dry-run / Preview Mode: Sender or recipients not configured. Email dispatch skipped.")
+        logger.warning(
+            "Dry-run / Preview Mode: Sender or recipients not configured. Email dispatch skipped. "
+            "Please ensure Automation Variables 'CopilotReport-MailSender' and 'CopilotReport-MailRecipients' are set."
+        )
     logger.info("=== Runbook Execution Completed ===")
 
 
