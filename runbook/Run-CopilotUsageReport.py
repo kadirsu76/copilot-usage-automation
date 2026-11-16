@@ -238,25 +238,6 @@ def _is_weekday(date_str: str) -> bool:
         return True
 
 
-def _render_app_icon(app_name: str) -> str:
-    app_meta = {
-        "Teams": {"bg": "#464EB8", "code": "T"},
-        "Chat": {"bg": "#0284C7", "code": "BC"},
-        "Outlook": {"bg": "#0078D4", "code": "O"},
-        "Word": {"bg": "#185ABD", "code": "W"},
-        "Excel": {"bg": "#107C41", "code": "X"},
-        "PowerPoint": {"bg": "#C43E1C", "code": "P"},
-        "Loop": {"bg": "#0B556A", "code": "L"},
-        "OneNote": {"bg": "#7719AA", "code": "N"},
-    }
-    meta = app_meta.get(app_name, {"bg": "#64748B", "code": app_name[:1]})
-    return (
-        f'<span style="background:{meta["bg"]};color:#ffffff;font-size:11px;font-weight:700;'
-        f'padding:2px 7px;border-radius:4px;display:inline-block;margin-right:6px;'
-        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Arial,sans-serif;">'
-        f'{meta["code"]}</span>'
-    )
-
 
 def render_trend_weekly(trend_points: List[Dict[str, Any]], total_users: int = 30) -> str:
     if not trend_points:
@@ -373,19 +354,13 @@ def generate_html(metrics: Dict[str, Any]) -> str:
         for app_name, stats in pair:
             title = app_names.get(app_name, app_name)
             rate = stats["adoption_rate"]
-            icon_svg = _render_app_icon(app_name)
             tds.append(f"""
             <td style="width: 50%; vertical-align: top; padding: 4px; box-sizing: border-box;">
                 <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px;">
                     <table style="width: 100%; border-collapse: collapse; margin-bottom: 6px;">
                         <tr>
-                            <td style="vertical-align: middle; padding: 0;">
-                                <table style="border-collapse: collapse;">
-                                    <tr>
-                                        <td style="vertical-align: middle; padding-right: 7px; line-height: 0;">{icon_svg}</td>
-                                        <td style="vertical-align: middle; font-size: 12px; font-weight: 600; color: #0f172a; white-space: nowrap;">{title}</td>
-                                    </tr>
-                                </table>
+                            <td style="vertical-align: middle; padding: 0; font-size: 12px; font-weight: 600; color: #0f172a; white-space: nowrap;">
+                                {title}
                             </td>
                             <td style="text-align: right; vertical-align: middle; font-size: 11px; font-weight: 600; color: #475569; font-variant-numeric: tabular-nums; white-space: nowrap; padding: 0;">
                                 {stats['active_count']} <span style="color: #94a3b8; font-weight: 400;">({rate}%)</span>
