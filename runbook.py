@@ -74,8 +74,19 @@ def fetch_report(token: str, period: str = "D28") -> List[Dict[str, Any]]:
     url = f"https://graph.microsoft.com/beta/reports/getMicrosoft365CopilotUsageUserDetail(period='{period}')"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     logger.info(f"Querying Graph API user details: {url}")
-    res = requests.get(url, headers=headers, allow_redirects=True, timeout=60)
-    res.raise_for_status()
+    try:
+        res = requests.get(url, headers=headers, allow_redirects=True, timeout=60)
+        res.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        err_body = res.text if 'res' in locals() else str(e)
+        logger.error(f"Graph API Request Failed (HTTP {res.status_code}): {err_body}")
+        if res.status_code == 403:
+            logger.error(
+                "403 Forbidden: The Managed Identity is missing 'Reports.Read.All' application permission, "
+                "or the Azure AD token cache has not propagated yet. "
+                "Run: pwsh ./scripts/Grant-GraphPermissions.ps1 -Mi <ManagedIdentityPrincipalId>"
+            )
+        raise
 
     content_type = res.headers.get("Content-Type", "")
     raw_text = res.text.strip()
