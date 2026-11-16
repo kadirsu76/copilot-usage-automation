@@ -48,35 +48,22 @@ IDENTITY_HEADER = os.getenv("IDENTITY_HEADER") or os.getenv("MSI_SECRET")
 
 
 def get_token() -> str:
-    """Acquires a Microsoft Graph token via Managed Identity or local SP fallback."""
-    if IDENTITY_ENDPOINT and IDENTITY_HEADER:
-        logger.info("Acquiring token via Azure Managed Identity...")
-        url = f"{IDENTITY_ENDPOINT}?resource=https://graph.microsoft.com/&api-version=2019-08-01"
-        headers = {"X-IDENTITY-HEADER": IDENTITY_HEADER}
-        res = requests.get(url, headers=headers, timeout=20)
-        res.raise_for_status()
-        token = res.json().get("access_token")
-        if not token:
-            raise RuntimeError("Managed Identity did not return an access_token.")
-        return token
+    """Acquires a Microsoft Graph token strictly via Azure Automation Managed Identity."""
+    if not IDENTITY_ENDPOINT or not IDENTITY_HEADER:
+        raise RuntimeError(
+            "Azure Managed Identity is required: IDENTITY_ENDPOINT / IDENTITY_HEADER environment variables not found. "
+            "Ensure that System-Assigned Managed Identity is enabled on this Azure Automation Account."
+        )
 
-    tenant_id = os.getenv("AZURE_TENANT_ID")
-    client_id = os.getenv("AZURE_CLIENT_ID")
-    client_secret = os.getenv("AZURE_CLIENT_SECRET")
-    if tenant_id and client_id and client_secret:
-        logger.info("Acquiring token via Service Principal...")
-        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-        payload = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "scope": "https://graph.microsoft.com/.default",
-            "grant_type": "client_credentials",
-        }
-        res = requests.post(token_url, data=payload, timeout=30)
-        res.raise_for_status()
-        return res.json()["access_token"]
-
-    raise RuntimeError("No authentication credentials found (Managed Identity or Service Principal).")
+    logger.info("Acquiring Microsoft Graph token via Azure Automation System-Assigned Managed Identity...")
+    url = f"{IDENTITY_ENDPOINT}?resource=https://graph.microsoft.com/&api-version=2019-08-01"
+    headers = {"X-IDENTITY-HEADER": IDENTITY_HEADER}
+    res = requests.get(url, headers=headers, timeout=25)
+    res.raise_for_status()
+    token = res.json().get("access_token")
+    if not token:
+        raise RuntimeError("Managed Identity endpoint did not return an access_token.")
+    return token
 
 
 def fetch_report(token: str, period: str = "D28") -> List[Dict[str, Any]]:
@@ -519,17 +506,21 @@ def build_audit_attachment(users: List[Dict[str, Any]], period: str = "D28"):
         return f"copilot_usage_roster_{period}.csv", "text/csv", b64
 
 
-def send_email(token: str, html_body: str, attachment: Optional[tuple] = None):
-    if not MAIL_SENDER or not MAIL_RECIPIENTS:
-        logger.warning("MAIL_SENDER or MAIL_RECIPIENTS not set; skipping mail dispatch.")
+def send_email(token: str, html_body: str, sender: str = None, recipients: List[str] = None, subject: str = None, attachment: Optional[tuple] = None):
+    sender = sender or MAIL_SENDER
+    recipients = recipients or MAIL_RECIPIENTS
+    subject = subject or MAIL_SUBJECT
+
+    if not sender or not recipients:
+        logger.warning("Sender or recipients not configured; skipping email dispatch.")
         return
 
-    url = f"https://graph.microsoft.com/v1.0/users/{MAIL_SENDER}/sendMail"
+    url = f"https://graph.microsoft.com/v1.0/users/{sender}/sendMail"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     msg = {
-        "subject": MAIL_SUBJECT,
+        "subject": subject,
         "body": {"contentType": "HTML", "content": html_body},
-        "toRecipients": [{"emailAddress": {"address": r}} for r in MAIL_RECIPIENTS],
+        "toRecipients": [{"emailAddress": {"address": r}} for r in recipients],
     }
     if attachment:
         fname, ctype, b64content = attachment
@@ -541,7 +532,7 @@ def send_email(token: str, html_body: str, attachment: Optional[tuple] = None):
         }]
 
     payload = {"message": msg, "saveToSentItems": "true"}
-    logger.info(f"Dispatching email: {MAIL_SENDER} -> {MAIL_RECIPIENTS}")
+    logger.info(f"Dispatching email: {sender} -> {recipients}")
     res = requests.post(url, headers=headers, json=payload, timeout=40)
     if res.status_code in (200, 202):
         logger.info("Report email with audit attachment dispatched successfully.")
@@ -550,20 +541,36 @@ def send_email(token: str, html_body: str, attachment: Optional[tuple] = None):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Azure Automation Copilot Usage Runbook")
+    parser.add_argument("--period", default=REPORT_PERIOD, help="Report period (D7, D28, D90, D180)")
+    parser.add_argument("--sender", default=MAIL_SENDER, help="Sender mailbox UPN")
+    parser.add_argument("--recipients", default=",".join(MAIL_RECIPIENTS), help="Comma-separated recipient emails")
+    parser.add_argument("--subject", default=MAIL_SUBJECT, help="Email subject line")
+    args, _ = parser.parse_known_args()
+
+    period = args.period or REPORT_PERIOD
+    sender = args.sender or MAIL_SENDER
+    recipients = [r.strip() for r in (args.recipients or "").split(",") if r.strip()] or MAIL_RECIPIENTS
+    subject = args.subject or MAIL_SUBJECT
+
     logger.info("=== Azure Automation Copilot Usage Runbook Initialized ===")
+    logger.info("Authentication Mode: Azure System-Assigned Managed Identity (Credential-free)")
+    logger.info(f"Report Period: {period}")
+
     token = get_token()
-    users = fetch_report(token, period=REPORT_PERIOD)
-    trend = fetch_trend(token, period=REPORT_PERIOD)
+    users = fetch_report(token, period=period)
+    trend = fetch_trend(token, period=period)
     logger.info(f"Retrieved {len(users)} user records and {len(trend)} trend points.")
 
-    metrics = aggregate_metrics(users, period=REPORT_PERIOD, trend=trend)
+    metrics = aggregate_metrics(users, period=period, trend=trend)
     html_content = generate_html(metrics)
-    attachment = build_audit_attachment(users, period=REPORT_PERIOD)
+    attachment = build_audit_attachment(users, period=period)
 
-    if MAIL_SENDER and MAIL_RECIPIENTS:
-        send_email(token, html_content, attachment=attachment)
+    if sender and recipients:
+        send_email(token, html_content, sender=sender, recipients=recipients, subject=subject, attachment=attachment)
     else:
-        logger.info("Local / dry-run mode: Email dispatch skipped.")
+        logger.info("Dry-run / Preview Mode: Sender or recipients not configured. Email dispatch skipped.")
     logger.info("=== Runbook Execution Completed ===")
 
 

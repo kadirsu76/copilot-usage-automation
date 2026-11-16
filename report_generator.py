@@ -658,7 +658,7 @@ def generate_html_report(metrics: Dict[str, Any]) -> str:
     <div class="header">
         <div class="badge-kicker">
             <span class="badge-kicker-dot"></span>
-            <span>Live Telemetry &bull; WeDo Technologies</span>
+            <span>Live Telemetry &bull; Microsoft 365 Copilot</span>
         </div>
         <h1>Microsoft 365 Copilot Adoption</h1>
         <div class="header-meta">Reporting Window: <strong>{metrics['period_label']}</strong> &bull; Generated {metrics['generated_at']}</div>

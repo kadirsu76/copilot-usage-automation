@@ -28,7 +28,7 @@ def generate_mock_copilot_users(count: int = 45) -> List[Dict[str, Any]]:
         fname = random.choice(first_names)
         lname = random.choice(last_names)
         display_name = f"{fname} {lname}"
-        email = f"{fname.lower()}.{lname.lower()}{i if i > 25 else ''}@wedo.com.tr"
+        email = f"{fname.lower()}.{lname.lower()}{i if i > 25 else ''}@contoso.com"
 
         user_type = random.choices(["power", "regular", "casual", "inactive"], weights=[15, 35, 30, 20])[0]
 
