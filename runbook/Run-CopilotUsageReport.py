@@ -239,65 +239,92 @@ def _is_weekday(date_str: str) -> bool:
 
 
 def _render_app_icon(app_name: str) -> str:
-    icons = {
-        "Teams": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#5059C9"/><path d="M14.5 9h5v6h-5z" fill="#7B83EB"/><circle cx="17" cy="6.5" r="2" fill="#7B83EB"/><rect x="4.5" y="6" width="9" height="12" rx="2" fill="#4B53BC"/><path d="M7 9h4M9 9v6" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/></svg>',
-        "Chat": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0284C7"/><path d="M6 8h12M6 12h8M6 16h5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/><circle cx="17.5" cy="15.5" r="2.5" fill="#38BDF8"/></svg>',
-        "Outlook": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0078D4"/><circle cx="14" cy="12" r="5" fill="#28A8EA"/><rect x="4" y="7" width="9" height="10" rx="1.5" fill="#005A9E"/><circle cx="8.5" cy="12" r="2.5" stroke="#ffffff" stroke-width="1.5"/></svg>',
-        "Word": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#185ABD"/><rect x="10" y="5" width="10" height="14" rx="1" fill="#2B7CD3"/><rect x="4" y="7" width="9" height="10" rx="1.5" fill="#103F91"/><path d="M6 10l1.2 4 1.3-4 1.3 4 1.2-4" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-        "Excel": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#107C41"/><rect x="10" y="5" width="10" height="14" rx="1" fill="#18A058"/><rect x="4" y="7" width="9" height="10" rx="1.5" fill="#0B552C"/><path d="M6.5 10l4 4M10.5 10l-4 4" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round"/></svg>',
-        "PowerPoint": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#C43E1C"/><rect x="10" y="5" width="10" height="14" rx="1" fill="#ED6C47"/><rect x="4" y="7" width="9" height="10" rx="1.5" fill="#93280F"/><path d="M7 14.5v-5h2.5a1.5 1.5 0 010 3H7" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round"/></svg>',
-        "Loop": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#0891B2"/><circle cx="12" cy="12" r="5.5" stroke="#ffffff" stroke-width="1.8" stroke-dasharray="8 4"/></svg>',
-        "OneNote": '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="4" fill="#7719AA"/><rect x="10" y="5" width="10" height="14" rx="1" fill="#9B2FAF"/><rect x="4" y="7" width="9" height="10" rx="1.5" fill="#501075"/><path d="M6.5 14.5v-5l4 5v-5" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    app_meta = {
+        "Teams": {"bg": "#464EB8", "code": "T"},
+        "Chat": {"bg": "#0284C7", "code": "BC"},
+        "Outlook": {"bg": "#0078D4", "code": "O"},
+        "Word": {"bg": "#185ABD", "code": "W"},
+        "Excel": {"bg": "#107C41", "code": "X"},
+        "PowerPoint": {"bg": "#C43E1C", "code": "P"},
+        "Loop": {"bg": "#0B556A", "code": "L"},
+        "OneNote": {"bg": "#7719AA", "code": "N"},
     }
-    return icons.get(app_name, '<span style="display:inline-block;width:18px;height:18px;background:#e2e8f0;border-radius:4px;"></span>')
+    meta = app_meta.get(app_name, {"bg": "#64748B", "code": app_name[:1]})
+    return (
+        f'<span style="background:{meta["bg"]};color:#ffffff;font-size:11px;font-weight:700;'
+        f'padding:2px 7px;border-radius:4px;display:inline-block;margin-right:6px;'
+        f'font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Arial,sans-serif;">'
+        f'{meta["code"]}</span>'
+    )
 
 
-def render_trend_svg(trend_points: List[Dict[str, Any]]) -> str:
+def render_trend_weekly(trend_points: List[Dict[str, Any]], total_users: int = 30) -> str:
     if not trend_points:
         return ""
-    n = len(trend_points)
-    max_p = max((t.get("promptsSubmitted", 0) for t in trend_points), default=1) or 1
-    max_u = max((t.get("anyAppActiveUsers", 0) for t in trend_points), default=1) or 1
-    chart_left, chart_right, chart_top, chart_bottom = 40, 780, 24, 140
-    chart_w, chart_h = chart_right - chart_left, chart_bottom - chart_top
-    bar_spacing = chart_w / n
-    bar_width = max(bar_spacing * 0.65, 4)
+    sorted_points = sorted(trend_points, key=lambda x: x.get("reportDate", ""))
+    weeks = []
+    chunk_size = 7
+    for i in range(0, len(sorted_points), chunk_size):
+        chunk = sorted_points[i:i+chunk_size]
+        if not chunk:
+            continue
+        start_d = chunk[0].get("reportDate", "")
+        end_d = chunk[-1].get("reportDate", "")
+        try:
+            start_lbl = datetime.strptime(start_d, "%Y-%m-%d").strftime("%d %b")
+            end_lbl = datetime.strptime(end_d, "%Y-%m-%d").strftime("%d %b")
+            label = f"{start_lbl} – {end_lbl}"
+        except Exception:
+            label = f"{start_d} – {end_d}"
+        max_active = max((p.get("anyAppActiveUsers", 0) for p in chunk), default=0)
+        total_prompts = sum(p.get("promptsSubmitted", 0) for p in chunk)
+        weeks.append({
+            "label": label,
+            "active_users": max_active,
+            "prompts": total_prompts,
+        })
 
-    bars, lines, dots, labels = [], [], [], []
-    for i, t in enumerate(trend_points):
-        xc = chart_left + (i + 0.5) * bar_spacing
-        p = t.get("promptsSubmitted", 0)
-        u = t.get("anyAppActiveUsers", 0)
-        ds = t.get("reportDate", "")
-        bh = (p / max_p) * (chart_h - 10)
-        by = chart_bottom - bh
-        fill = "#e2e8f0" if not _is_weekday(ds) else "#0f172a"
-        bars.append(f'<rect x="{xc - bar_width/2:.1f}" y="{by:.1f}" width="{bar_width:.1f}" height="{max(bh, 1):.1f}" fill="{fill}" rx="2"><title>{ds}: {p} prompts, {u} active users</title></rect>')
-        uy = chart_bottom - (u / max_u) * (chart_h - 10)
-        lines.append(f"{xc:.1f},{uy:.1f}")
-        dots.append(f'<circle cx="{xc:.1f}" cy="{uy:.1f}" r="3" fill="#0284c7" stroke="#ffffff" stroke-width="1.5"/>')
-        if i % 7 == 0 or i == n - 1:
-            try:
-                sd = datetime.strptime(ds, "%Y-%m-%d").strftime("%d %b")
-            except Exception:
-                sd = ds[-5:]
-            labels.append(f'<text x="{xc:.1f}" y="160" font-size="10" fill="#94a3b8" text-anchor="middle" font-family="-apple-system, sans-serif">{sd}</text>')
+    max_prompts = max((w["prompts"] for w in weeks), default=1) or 1
+    rows = []
+    for idx, w in enumerate(weeks, 1):
+        u_rate = round((w["active_users"] / total_users * 100), 1) if total_users > 0 else 0
+        p_pct = min(max(round((w["prompts"] / max_prompts * 100), 1), 2), 100)
+        rows.append(f"""
+        <tr style="border-bottom:1px solid #f1f5f9;font-size:12px;">
+            <td style="padding:10px 10px;font-weight:600;color:#0f172a;width:150px;white-space:nowrap;">
+                Week {idx} <span style="font-size:11px;font-weight:400;color:#64748b;">({w['label']})</span>
+            </td>
+            <td style="padding:10px 10px;width:160px;">
+                <div style="font-size:11px;font-weight:600;color:#0284c7;font-variant-numeric:tabular-nums;margin-bottom:3px;">
+                    {w['active_users']} active <span style="color:#94a3b8;font-weight:400;">({u_rate}%)</span>
+                </div>
+                <div style="background:#f1f5f9;height:4px;border-radius:2px;overflow:hidden;width:100%;">
+                    <div style="background:#0284c7;width:{min(max(u_rate, 2), 100)}%;height:4px;border-radius:2px;"></div>
+                </div>
+            </td>
+            <td style="padding:10px 10px;width:160px;">
+                <div style="font-size:11px;font-weight:600;color:#0f172a;font-variant-numeric:tabular-nums;margin-bottom:3px;">
+                    {w['prompts']:,} prompts
+                </div>
+                <div style="background:#f1f5f9;height:4px;border-radius:2px;overflow:hidden;width:100%;">
+                    <div style="background:#0f172a;width:{p_pct}%;height:4px;border-radius:2px;"></div>
+                </div>
+            </td>
+        </tr>
+        """)
 
     return f"""
-    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:16px;margin-bottom:24px;">
-        <div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:12px;display:flex;gap:18px;">
-            <span><span style="display:inline-block;width:10px;height:10px;background:#0f172a;border-radius:2px;margin-right:4px;"></span>Daily Prompts (Max {max_p})</span>
-            <span><span style="display:inline-block;width:12px;height:2px;background:#0284c7;margin-right:4px;"></span>Active Users (Max {max_u})</span>
-        </div>
-        <svg viewBox="0 0 800 170" style="width:100%;height:auto;display:block;">
-            <line x1="40" y1="{chart_bottom}" x2="780" y2="{chart_bottom}" stroke="#e2e8f0"/>
-            <text x="32" y="{chart_bottom}" font-size="10" fill="#94a3b8" text-anchor="end">0</text>
-            <text x="32" y="{chart_top + 4}" font-size="10" fill="#94a3b8" text-anchor="end">{max_p}</text>
-            {''.join(bars)}
-            <polyline fill="none" stroke="#0284c7" stroke-width="2" points="{' '.join(lines)}"/>
-            {''.join(dots)}
-            {''.join(labels)}
-        </svg>
+    <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:24px;background:#ffffff;">
+        <table style="width:100%;border-collapse:collapse;text-align:left;">
+            <thead>
+                <tr style="background:#f8fafc;font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;">
+                    <th style="padding:8px 10px;">Window</th>
+                    <th style="padding:8px 10px;">Weekly Active Users</th>
+                    <th style="padding:8px 10px;">Weekly Prompts</th>
+                </tr>
+            </thead>
+            <tbody>{''.join(rows)}</tbody>
+        </table>
     </div>
     """
 
@@ -404,7 +431,7 @@ def generate_html(metrics: Dict[str, Any]) -> str:
     if not inactive_rows:
         inactive_rows = '<tr><td colspan="3" style="padding:14px 10px;text-align:center;color:#15803d;font-size:12px;">All licensed accounts have recorded Copilot activity during this period.</td></tr>'
 
-    trend_html = render_trend_svg(metrics.get("trend_points", []))
+    trend_html = render_trend_weekly(metrics.get("trend_points", []), total_users=metrics.get("total_users", 30))
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -415,11 +442,7 @@ def generate_html(metrics: Dict[str, Any]) -> str:
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f8fafc;margin:0;padding:24px 12px;color:#0f172a;-webkit-font-smoothing:antialiased;">
 <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
     <div style="padding:24px 28px;border-bottom:1px solid #e2e8f0;">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px;display:inline-flex;align-items:center;gap:6px;">
-            <span style="width:6px;height:6px;border-radius:50%;background:#16a34a;display:inline-block;"></span>
-            <span>Live Telemetry &bull; Azure Automation</span>
-        </div>
-        <h1 style="margin:0 0 4px 0;font-size:20px;font-weight:700;letter-spacing:-0.02em;">Microsoft 365 Copilot Adoption</h1>
+        <h1 style="margin:0 0 6px 0;font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;">Microsoft 365 Copilot Adoption</h1>
         <div style="font-size:12px;color:#64748b;">Reporting Window: <strong>Last 28 Days</strong> &bull; Generated {datetime.now().strftime('%d %b %Y, %H:%M')}</div>
     </div>
     <div style="padding:24px 28px;">
@@ -453,7 +476,7 @@ def generate_html(metrics: Dict[str, Any]) -> str:
             </tr>
         </table>
 
-        {f'<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">Daily Activity & Prompt Momentum</div>{trend_html}' if trend_html else ''}
+        {f'<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">Weekly Activity & Prompt Momentum</div>{trend_html}' if trend_html else ''}
 
         <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">Application Penetration</div>
         {apps_table}
@@ -472,18 +495,13 @@ def generate_html(metrics: Dict[str, Any]) -> str:
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px;margin-top:24px;">
             <table style="width:100%;border-collapse:collapse;">
                 <tr>
-                    <td style="width:24px;vertical-align:top;padding-right:10px;line-height:0;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                            <rect width="24" height="24" rx="4" fill="#107C41"/>
-                            <rect x="10" y="5" width="10" height="14" rx="1" fill="#18A058"/>
-                            <rect x="4" y="7" width="9" height="10" rx="1.5" fill="#0B552C"/>
-                            <path d="M6.5 10l4 4M10.5 10l-4 4" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round"/>
-                        </svg>
+                    <td style="width:28px;vertical-align:top;padding-right:10px;">
+                        <span style="background:#107C41;color:#ffffff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:4px;display:inline-block;font-family:-apple-system,sans-serif;">XLS</span>
                     </td>
                     <td style="vertical-align:top;">
-                        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">Detailed User Audit Roster Attached</div>
+                        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:3px;">Detailed User Audit Roster Attached</div>
                         <p style="font-size:12px;color:#475569;line-height:1.5;margin:0;">
-                            For detailed departmental audits and user-level analysis, the complete roster of all <strong>{metrics['total_users']} licensed accounts</strong> with individual application engagement timestamps is attached as a spreadsheet (<code>copilot_usage_roster_{metrics['period']}.xlsx</code>).
+                            For detailed departmental audits and user-level analysis, the complete roster of all <strong>{metrics['total_users']} licensed accounts</strong> with individual application engagement timestamps is attached as an Excel spreadsheet (<code>copilot_usage_roster_{metrics['period']}.xlsx</code>).
                         </p>
                     </td>
                 </tr>
@@ -491,8 +509,8 @@ def generate_html(metrics: Dict[str, Any]) -> str:
         </div>
     </div>
     <div style="background:#f8fafc;padding:16px 28px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;">
-        <span>Copilot Usage Automation &bull; Microsoft Graph Telemetry</span>
-        <span>Generated on {datetime.now().strftime('%d %b %Y, %H:%M')}</span>
+        <span>Microsoft 365 Copilot Usage Report</span>
+        <span>Generated on {datetime.now().strftime('%d %b %Y')}</span>
     </div>
 </div>
 </body>
@@ -501,79 +519,154 @@ def generate_html(metrics: Dict[str, Any]) -> str:
 
 def build_audit_attachment(users: List[Dict[str, Any]], period: str = "D28"):
     """
-    Generates an Excel roster (if openpyxl available) or CSV fallback in memory.
+    Generates a genuine Microsoft Excel (.xlsx) file in memory using pure Python (zero external dependencies).
     Returns (filename, contentType, base64_content).
     """
+    import io
+    import zipfile
     import base64
-    try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-        from openpyxl.utils import get_column_letter
+    from xml.sax.saxutils import escape
 
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Copilot User Roster"
-        ws.views.sheetView[0].showGridLines = True
+    headers = [
+        "Rank", "Display Name", "Email (UPN)", "Status", "Total Prompts",
+        "Active Days", "Last Activity", "Teams", "Chat", "Outlook",
+        "Word", "Excel", "PowerPoint", "Loop", "OneNote"
+    ]
+    cols_letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"]
+    col_widths = [8, 26, 32, 12, 16, 14, 16, 14, 14, 14, 14, 14, 14, 14, 14]
 
-        header_fill = PatternFill(start_color="0F172A", end_color="0F172A", fill_type="solid")
-        header_font = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
-        regular_font = Font(name="Segoe UI", size=10, color="0F172A")
-        bold_font = Font(name="Segoe UI", size=10, bold=True, color="0F172A")
-        muted_font = Font(name="Segoe UI", size=9, color="64748B")
-        active_fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
-        active_font = Font(name="Segoe UI", size=9, bold=True, color="166534")
-        inactive_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
-        inactive_font = Font(name="Segoe UI", size=9, bold=True, color="991B1B")
+    styles_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="4">
+    <font><name val="Segoe UI"/><sz val="10"/><color rgb="FF0F172A"/></font>
+    <font><b/><color rgb="FFFFFFFF"/><name val="Segoe UI"/><sz val="10"/></font>
+    <font><b/><color rgb="FF166534"/><name val="Segoe UI"/><sz val="9"/></font>
+    <font><b/><color rgb="FF991B1B"/><name val="Segoe UI"/><sz val="9"/></font>
+  </fonts>
+  <fills count="6">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0F172A"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFF8FAFC"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFDCFCE7"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border>
+      <left style="thin"><color rgb="FFE2E8F0"/></left>
+      <right style="thin"><color rgb="FFE2E8F0"/></right>
+      <top style="thin"><color rgb="FFE2E8F0"/></top>
+      <bottom style="thin"><color rgb="FFE2E8F0"/></bottom>
+    </border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="7">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+    <xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>
+    <xf numFmtId="0" fontId="2" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="3" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment horizontal="right" vertical="center"/></xf>
+  </cellXfs>
+</styleSheet>"""
 
-        headers = ["Rank", "Display Name", "Email (UPN)", "Status", "Total Prompts", "Active Days", "Last Activity", "Teams", "Chat", "Outlook", "Word", "Excel", "PowerPoint", "Loop", "OneNote"]
-        ws.append(headers)
-        ws.row_dimensions[1].height = 24
-        for cell in ws[1]:
-            cell.fill = header_fill
-            cell.font = header_font
+    content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>"""
 
-        sorted_users = sorted(users, key=lambda x: (x["is_active"], x.get("prompts_submitted", 0), x["total_active_days"]), reverse=True)
-        for idx, u in enumerate(sorted_users, 1):
-            act = u.get("app_last_activity", {})
-            ws.append([
-                idx, u["display_name"], u["user_principal_name"],
-                "Active" if u["is_active"] else "Inactive",
-                u.get("prompts_submitted", 0), u["total_active_days"],
-                u["last_activity_date"] or "-",
-                act.get("Teams") or "-", act.get("Chat") or "-", act.get("Outlook") or "-",
-                act.get("Word") or "-", act.get("Excel") or "-", act.get("PowerPoint") or "-",
-                act.get("Loop") or "-", act.get("OneNote") or "-",
-            ])
-            r_idx = idx + 1
-            ws.row_dimensions[r_idx].height = 20
-            for c_idx, c in enumerate(ws[r_idx], 1):
-                c.font = regular_font
-                if c_idx == 4:
-                    c.fill = active_fill if u["is_active"] else inactive_fill
-                    c.font = active_font if u["is_active"] else inactive_font
-                elif c_idx == 5 and u.get("prompts_submitted", 0) > 0:
-                    c.font = bold_font
+    root_rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>"""
 
-        for col in ws.columns:
-            col_letter = get_column_letter(col[0].column)
-            max_len = max(len(str(c.value or "")) for c in col)
-            ws.column_dimensions[col_letter].width = max(max_len + 3, 11)
+    wb_rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"""
 
-        ws.freeze_panes = "A2"
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        b64 = base64.b64encode(buf.read()).decode("utf-8")
-        return f"copilot_usage_roster_{period}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", b64
-    except ImportError:
-        buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(["Rank", "Display Name", "Email", "Status", "Prompts", "Active Days", "Last Activity", "Applications"])
-        sorted_users = sorted(users, key=lambda x: (x["is_active"], x.get("prompts_submitted", 0), x["total_active_days"]), reverse=True)
-        for idx, u in enumerate(sorted_users, 1):
-            writer.writerow([idx, u["display_name"], u["user_principal_name"], "Active" if u["is_active"] else "Inactive", u.get("prompts_submitted", 0), u["total_active_days"], u["last_activity_date"], ", ".join(u.get("apps_used", []))])
-        b64 = base64.b64encode(buf.getvalue().encode("utf-8")).decode("utf-8")
-        return f"copilot_usage_roster_{period}.csv", "text/csv", b64
+    wb = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Copilot User Roster" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>"""
+
+    sheet_lines = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+        '<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
+        '<sheetFormatPr defaultRowHeight="18"/>',
+        '<cols>'
+    ]
+    for idx, w in enumerate(col_widths, 1):
+        sheet_lines.append(f'<col min="{idx}" max="{idx}" width="{w}" customWidth="1"/>')
+    sheet_lines.append('</cols><sheetData>')
+
+    # Header Row
+    sheet_lines.append('<row r="1" ht="26" customHeight="1">')
+    for c_idx, h in enumerate(headers):
+        sheet_lines.append(f'<c r="{cols_letters[c_idx]}1" t="inlineStr" s="1"><is><t>{escape(str(h))}</t></is></c>')
+    sheet_lines.append('</row>')
+
+    sorted_users = sorted(users, key=lambda x: (x.get("is_active", False), x.get("prompts_submitted", 0), x.get("total_active_days", 0)), reverse=True)
+    for r_idx, u in enumerate(sorted_users, start=2):
+        act = u.get("app_last_activity", {})
+        is_active = u.get("is_active", False)
+        status_style = "4" if is_active else "5"
+        row_base_style = "2" if r_idx % 2 == 0 else "3"
+
+        row_data = [
+            (r_idx - 1, True, row_base_style),
+            (u.get("display_name", ""), False, row_base_style),
+            (u.get("user_principal_name", ""), False, row_base_style),
+            ("Active" if is_active else "Inactive", False, status_style),
+            (u.get("prompts_submitted", 0), True, "6"),
+            (u.get("total_active_days", 0), True, "6"),
+            (u.get("last_activity_date") or "-", False, row_base_style),
+            (act.get("Teams") or "-", False, row_base_style),
+            (act.get("Chat") or "-", False, row_base_style),
+            (act.get("Outlook") or "-", False, row_base_style),
+            (act.get("Word") or "-", False, row_base_style),
+            (act.get("Excel") or "-", False, row_base_style),
+            (act.get("PowerPoint") or "-", False, row_base_style),
+            (act.get("Loop") or "-", False, row_base_style),
+            (act.get("OneNote") or "-", False, row_base_style),
+        ]
+
+        sheet_lines.append(f'<row r="{r_idx}" ht="20" customHeight="1">')
+        for c_idx, (val, is_num, cell_style) in enumerate(row_data):
+            col_letter = cols_letters[c_idx]
+            if is_num and isinstance(val, (int, float)):
+                sheet_lines.append(f'<c r="{col_letter}{r_idx}" s="{cell_style}"><v>{val}</v></c>')
+            else:
+                sheet_lines.append(f'<c r="{col_letter}{r_idx}" t="inlineStr" s="{cell_style}"><is><t>{escape(str(val))}</t></is></c>')
+        sheet_lines.append('</row>')
+
+    sheet_lines.append('</sheetData></worksheet>')
+    sheet_xml = ''.join(sheet_lines)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", content_types)
+        z.writestr("_rels/.rels", root_rels)
+        z.writestr("xl/workbook.xml", wb)
+        z.writestr("xl/_rels/workbook.xml.rels", wb_rels)
+        z.writestr("xl/styles.xml", styles_xml)
+        z.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+
+    xlsx_bytes = buf.getvalue()
+    b64 = base64.b64encode(xlsx_bytes).decode("ascii")
+    fname = f"copilot_usage_roster_{period}.xlsx"
+    ctype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    return fname, ctype, b64
 
 
 def send_email(token: str, html_body: str, sender: str = None, recipients: List[str] = None, subject: str = None, attachment: Optional[tuple] = None):
