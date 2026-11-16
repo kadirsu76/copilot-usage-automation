@@ -26,6 +26,9 @@ param(
     [switch]$Wait,
 
     [Parameter(Mandatory = $false)]
+    [switch]$SyncRunbook,
+
+    [Parameter(Mandatory = $false)]
     [ValidateRange(5, 300)]
     [int]$PollSeconds = 10,
 
@@ -78,6 +81,15 @@ if ([string]::IsNullOrWhiteSpace($subscriptionIdValue)) {
 $normalizedBaseName = $BaseName.ToLowerInvariant().Replace('_', '-')
 $automationAccountName = "aa-$normalizedBaseName"
 $runbookName = "rb-$normalizedBaseName-report"
+
+if ($SyncRunbook.IsPresent) {
+    $updateScript = Join-Path $PSScriptRoot 'Update-Runbook.ps1'
+    if (Test-Path $updateScript) {
+        Write-Host "Syncing runbook code before triggering job..." -ForegroundColor Cyan
+        & $updateScript -ResourceGroupName $ResourceGroupName -BaseName $BaseName -SubscriptionId $subscriptionIdValue
+    }
+}
+
 $jobName = [guid]::NewGuid().ToString()
 $jobUrl = "https://management.azure.com/subscriptions/${subscriptionIdValue}/resourceGroups/${ResourceGroupName}/providers/Microsoft.Automation/automationAccounts/${automationAccountName}/jobs/${jobName}?api-version=2024-10-23"
 $jobBody = '{"properties":{"runbook":{"name":"' + $runbookName + '"}}}'

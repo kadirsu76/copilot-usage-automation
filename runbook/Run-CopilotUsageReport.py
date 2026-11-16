@@ -57,9 +57,18 @@ def get_token() -> str:
         )
 
     logger.info("Acquiring Microsoft Graph token via Azure Automation System-Assigned Managed Identity...")
-    url = f"{IDENTITY_ENDPOINT}?resource=https://graph.microsoft.com/&api-version=2019-08-01"
-    headers = {"X-IDENTITY-HEADER": IDENTITY_HEADER}
-    res = requests.get(url, headers=headers, timeout=25)
+    headers = {"X-IDENTITY-HEADER": IDENTITY_HEADER, "Metadata": "true"}
+    url_bypass = f"{IDENTITY_ENDPOINT}?resource=https://graph.microsoft.com/&api-version=2019-08-01&bypass_cache=true"
+    url_std = f"{IDENTITY_ENDPOINT}?resource=https://graph.microsoft.com/&api-version=2019-08-01"
+
+    res = None
+    try:
+        res = requests.get(url_bypass, headers=headers, timeout=25)
+        if res.status_code != 200:
+            res = requests.get(url_std, headers=headers, timeout=25)
+    except Exception:
+        res = requests.get(url_std, headers=headers, timeout=25)
+
     res.raise_for_status()
     token = res.json().get("access_token")
     if not token:
