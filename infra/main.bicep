@@ -23,9 +23,6 @@ param mailSender string = ''
 @description('Comma-separated list of recipient email addresses')
 param mailRecipients string = ''
 
-@description('Subject line of the dispatched email report')
-param mailSubject string = 'Microsoft 365 Copilot Adoption & Usage Report'
-
 @description('Execution frequency: Week (every Monday at 08:00 UTC) or Day')
 @allowed([
   'Week'
@@ -109,16 +106,6 @@ resource mailRecipientsVariable 'Microsoft.Automation/automationAccounts/variabl
     description: 'Comma-separated recipient email addresses.'
     isEncrypted: false
     value: '"${mailRecipients}"'
-  }
-}
-
-resource mailSubjectVariable 'Microsoft.Automation/automationAccounts/variables@2024-10-23' = {
-  name: 'CopilotReport-MailSubject'
-  parent: automationAccount
-  properties: {
-    description: 'Subject line of the email report.'
-    isEncrypted: false
-    value: '"${mailSubject}"'
   }
 }
 

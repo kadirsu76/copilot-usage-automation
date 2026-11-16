@@ -14,9 +14,6 @@
     "mailRecipients": {
       "value": ""
     },
-    "mailSubject": {
-      "value": "Microsoft 365 Copilot Adoption & Usage Report"
-    },
     "scheduleFrequency": {
       "value": "Week"
     }

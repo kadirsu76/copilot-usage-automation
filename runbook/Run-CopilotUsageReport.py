@@ -39,9 +39,10 @@ MAIL_SENDER = os.getenv("MAIL_SENDER", "").strip()
 MAIL_RECIPIENTS = [
     e.strip() for e in os.getenv("MAIL_RECIPIENTS", "").split(",") if e.strip()
 ]
-MAIL_SUBJECT = os.getenv(
-    "MAIL_SUBJECT", "Microsoft 365 Copilot Adoption & Usage Report"
-).strip()
+
+def get_default_subject() -> str:
+    """Returns fixed email subject with current date (no time component)."""
+    return f"Microsoft 365 Copilot Adoption & Usage Report - {datetime.now().strftime('%d %b %Y')}"
 
 IDENTITY_ENDPOINT = os.getenv("IDENTITY_ENDPOINT") or os.getenv("MSI_ENDPOINT")
 IDENTITY_HEADER = os.getenv("IDENTITY_HEADER") or os.getenv("MSI_SECRET")
@@ -509,7 +510,7 @@ def build_audit_attachment(users: List[Dict[str, Any]], period: str = "D28"):
 def send_email(token: str, html_body: str, sender: str = None, recipients: List[str] = None, subject: str = None, attachment: Optional[tuple] = None):
     sender = sender or MAIL_SENDER
     recipients = recipients or MAIL_RECIPIENTS
-    subject = subject or MAIL_SUBJECT
+    subject = subject or get_default_subject()
 
     if not sender or not recipients:
         logger.warning("Sender or recipients not configured; skipping email dispatch.")
@@ -546,13 +547,12 @@ def main():
     parser.add_argument("--period", default=REPORT_PERIOD, help="Report period (D7, D28, D90, D180)")
     parser.add_argument("--sender", default=MAIL_SENDER, help="Sender mailbox UPN")
     parser.add_argument("--recipients", default=",".join(MAIL_RECIPIENTS), help="Comma-separated recipient emails")
-    parser.add_argument("--subject", default=MAIL_SUBJECT, help="Email subject line")
     args, _ = parser.parse_known_args()
 
     period = args.period or REPORT_PERIOD
     sender = args.sender or MAIL_SENDER
     recipients = [r.strip() for r in (args.recipients or "").split(",") if r.strip()] or MAIL_RECIPIENTS
-    subject = args.subject or MAIL_SUBJECT
+    subject = get_default_subject()
 
     logger.info("=== Azure Automation Copilot Usage Runbook Initialized ===")
     logger.info("Authentication Mode: Azure System-Assigned Managed Identity (Credential-free)")

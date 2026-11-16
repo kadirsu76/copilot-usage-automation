@@ -5,6 +5,7 @@ Loads settings from environment variables or .env file.
 
 import os
 from pathlib import Path
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Base directory of the project
@@ -39,9 +40,7 @@ MAIL_RECIPIENTS = [
     for email in os.getenv("MAIL_RECIPIENTS", "").split(",")
     if email.strip()
 ]
-MAIL_SUBJECT = os.getenv(
-    "MAIL_SUBJECT", "Microsoft 365 Copilot Kullanım ve Benimseme Raporu"
-).strip()
+MAIL_SUBJECT = f"Microsoft 365 Copilot Adoption & Usage Report - {datetime.now().strftime('%d %b %Y')}"
 
 # Graph API Base Endpoints
 GRAPH_API_V1 = "https://graph.microsoft.com/v1.0"

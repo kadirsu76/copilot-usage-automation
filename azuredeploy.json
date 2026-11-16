@@ -38,13 +38,6 @@
         "description": "Comma-separated list of recipient email addresses"
       }
     },
-    "mailSubject": {
-      "type": "string",
-      "defaultValue": "Microsoft 365 Copilot Adoption & Usage Report",
-      "metadata": {
-        "description": "Subject line for the report email"
-      }
-    },
     "scheduleFrequency": {
       "type": "string",
       "defaultValue": "Week",
@@ -79,9 +72,6 @@
           },
           "mailRecipients": {
             "value": "[parameters('mailRecipients')]"
-          },
-          "mailSubject": {
-            "value": "[parameters('mailSubject')]"
           },
           "scheduleFrequency": {
             "value": "[parameters('scheduleFrequency')]"
