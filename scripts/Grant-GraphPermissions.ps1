@@ -17,9 +17,18 @@
 #>
 
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [Alias('ManagedIdentityObjectId', 'PrincipalId')]
     [string]$Mi,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ResourceGroupName,
+
+    [Parameter(Mandatory = $false)]
+    [string]$AutomationAccountName,
+
+    [Parameter(Mandatory = $false)]
+    [string]$BaseName = 'copilotrep',
 
     [Parameter(Mandatory = $false)]
     [string[]]$GraphAppPermissions = @(
@@ -30,6 +39,24 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($Mi)) {
+    if (-not [string]::IsNullOrWhiteSpace($ResourceGroupName)) {
+        if ([string]::IsNullOrWhiteSpace($AutomationAccountName)) {
+            $AutomationAccountName = "aa-$($BaseName.ToLowerInvariant().Replace('_', '-'))"
+        }
+        Write-Host "Resolving Managed Identity for '$AutomationAccountName' in '$ResourceGroupName'..." -ForegroundColor Cyan
+        $resolved = az automation account show --resource-group $ResourceGroupName --name $AutomationAccountName --query identity.principalId -o tsv 2>$null
+        if ($resolved -and $resolved.Trim() -match '^[0-9a-fA-F-]{36}$') {
+            $Mi = $resolved.Trim()
+            Write-Host "Resolved Managed Identity Principal ID: $Mi" -ForegroundColor Green
+        }
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($Mi)) {
+    throw "Managed Identity ID is required. Provide -Mi <PrincipalIdGuid> or pass -ResourceGroupName <Name>."
+}
 
 $managedIdentityObjectId = $Mi.Trim()
 if ($managedIdentityObjectId -notmatch '^[0-9a-fA-F-]{36}$') {
