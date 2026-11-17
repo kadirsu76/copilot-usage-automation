@@ -239,45 +239,83 @@ def _is_weekday(date_str: str) -> bool:
 
 
 
-def render_trend_weekly(trend_points: List[Dict[str, Any]], total_users: int = 30) -> str:
+def render_trend_table(trend_points: List[Dict[str, Any]], period: str = "D28", total_users: int = 30) -> tuple:
+    """
+    Renders activity and momentum trend table.
+    Returns (section_title, html_table).
+    If period is D7 (or <= 7 points), renders a daily progression.
+    Otherwise, renders weekly intervals.
+    """
     if not trend_points:
-        return ""
+        return "", ""
     sorted_points = sorted(trend_points, key=lambda x: x.get("reportDate", ""))
-    weeks = []
-    chunk_size = 7
-    for i in range(0, len(sorted_points), chunk_size):
-        chunk = sorted_points[i:i+chunk_size]
-        if not chunk:
-            continue
-        start_d = chunk[0].get("reportDate", "")
-        end_d = chunk[-1].get("reportDate", "")
-        try:
-            start_lbl = datetime.strptime(start_d, "%Y-%m-%d").strftime("%d %b")
-            end_lbl = datetime.strptime(end_d, "%Y-%m-%d").strftime("%d %b")
-            label = f"{start_lbl} – {end_lbl}"
-        except Exception:
-            label = f"{start_d} – {end_d}"
-        max_active = max((p.get("anyAppActiveUsers", 0) for p in chunk), default=0)
-        total_prompts = sum(p.get("promptsSubmitted", 0) for p in chunk)
-        weeks.append({
-            "label": label,
-            "active_users": max_active,
-            "prompts": total_prompts,
-        })
+    is_daily = (period.upper() == "D7" or len(sorted_points) <= 7)
 
-    max_prompts = max((w["prompts"] for w in weeks), default=1) or 1
+    if is_daily:
+        section_title = "Daily Activity & Prompt Momentum"
+        col_window = "Date"
+        col_users = "Daily Active Users"
+        col_prompts = "Daily Prompts"
+        items = []
+        for p in sorted_points:
+            d_str = p.get("reportDate", "")
+            try:
+                dt = datetime.strptime(d_str, "%Y-%m-%d")
+                lbl = dt.strftime("%d %b (%a)")
+            except Exception:
+                lbl = d_str
+            items.append({
+                "label": lbl,
+                "prefix": "",
+                "active_users": p.get("anyAppActiveUsers", 0),
+                "prompts": p.get("promptsSubmitted", 0),
+            })
+    else:
+        section_title = "Weekly Activity & Prompt Momentum"
+        col_window = "Window"
+        col_users = "Weekly Active Users"
+        col_prompts = "Weekly Prompts"
+        items = []
+        chunk_size = 7
+        for i in range(0, len(sorted_points), chunk_size):
+            chunk = sorted_points[i:i+chunk_size]
+            if not chunk:
+                continue
+            start_d = chunk[0].get("reportDate", "")
+            end_d = chunk[-1].get("reportDate", "")
+            try:
+                start_lbl = datetime.strptime(start_d, "%Y-%m-%d").strftime("%d %b")
+                end_lbl = datetime.strptime(end_d, "%Y-%m-%d").strftime("%d %b")
+                lbl = f"{start_lbl} – {end_lbl}"
+            except Exception:
+                lbl = f"{start_d} – {end_d}"
+            max_active = max((p.get("anyAppActiveUsers", 0) for p in chunk), default=0)
+            total_prompts = sum(p.get("promptsSubmitted", 0) for p in chunk)
+            items.append({
+                "label": lbl,
+                "prefix": f"Week {len(items) + 1}",
+                "active_users": max_active,
+                "prompts": total_prompts,
+            })
+
+    max_prompts = max((it["prompts"] for it in items), default=1) or 1
     rows = []
-    for idx, w in enumerate(weeks, 1):
-        u_rate = round((w["active_users"] / total_users * 100), 1) if total_users > 0 else 0
-        p_pct = min(max(round((w["prompts"] / max_prompts * 100), 1), 2), 100)
+    for it in items:
+        u_rate = round((it["active_users"] / total_users * 100), 1) if total_users > 0 else 0
+        p_pct = min(max(round((it["prompts"] / max_prompts * 100), 1), 2), 100)
+        if it["prefix"]:
+            cell_label = f"{it['prefix']} <span style=\"font-size:11px;font-weight:400;color:#64748b;\">({it['label']})</span>"
+        else:
+            cell_label = f"<span style=\"font-weight:600;color:#0f172a;\">{it['label']}</span>"
+
         rows.append(f"""
         <tr style="border-bottom:1px solid #f1f5f9;font-size:12px;">
             <td style="padding:10px 10px;font-weight:600;color:#0f172a;width:150px;white-space:nowrap;">
-                Week {idx} <span style="font-size:11px;font-weight:400;color:#64748b;">({w['label']})</span>
+                {cell_label}
             </td>
             <td style="padding:10px 10px;width:160px;">
                 <div style="font-size:11px;font-weight:600;color:#0284c7;font-variant-numeric:tabular-nums;margin-bottom:3px;">
-                    {w['active_users']} active <span style="color:#94a3b8;font-weight:400;">({u_rate}%)</span>
+                    {it['active_users']} active <span style="color:#94a3b8;font-weight:400;">({u_rate}%)</span>
                 </div>
                 <div style="background:#f1f5f9;height:4px;border-radius:2px;overflow:hidden;width:100%;">
                     <div style="background:#0284c7;width:{min(max(u_rate, 2), 100)}%;height:4px;border-radius:2px;"></div>
@@ -285,7 +323,7 @@ def render_trend_weekly(trend_points: List[Dict[str, Any]], total_users: int = 3
             </td>
             <td style="padding:10px 10px;width:160px;">
                 <div style="font-size:11px;font-weight:600;color:#0f172a;font-variant-numeric:tabular-nums;margin-bottom:3px;">
-                    {w['prompts']:,} prompts
+                    {it['prompts']:,} prompts
                 </div>
                 <div style="background:#f1f5f9;height:4px;border-radius:2px;overflow:hidden;width:100%;">
                     <div style="background:#0f172a;width:{p_pct}%;height:4px;border-radius:2px;"></div>
@@ -294,20 +332,21 @@ def render_trend_weekly(trend_points: List[Dict[str, Any]], total_users: int = 3
         </tr>
         """)
 
-    return f"""
+    table_html = f"""
     <div style="border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:24px;background:#ffffff;">
         <table style="width:100%;border-collapse:collapse;text-align:left;">
             <thead>
                 <tr style="background:#f8fafc;font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #e2e8f0;">
-                    <th style="padding:8px 10px;">Window</th>
-                    <th style="padding:8px 10px;">Weekly Active Users</th>
-                    <th style="padding:8px 10px;">Weekly Prompts</th>
+                    <th style="padding:8px 10px;">{col_window}</th>
+                    <th style="padding:8px 10px;">{col_users}</th>
+                    <th style="padding:8px 10px;">{col_prompts}</th>
                 </tr>
             </thead>
             <tbody>{''.join(rows)}</tbody>
         </table>
     </div>
     """
+    return section_title, table_html
 
 
 def aggregate_metrics(users: List[Dict[str, Any]], period: str = "D28", trend: List[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -325,8 +364,19 @@ def aggregate_metrics(users: List[Dict[str, Any]], period: str = "D28", trend: L
         rate = round((count / total_users * 100), 1) if total_users > 0 else 0.0
         app_stats[app] = {"active_count": count, "adoption_rate": rate}
 
+    period_labels = {
+        "D7": "Last 7 Days",
+        "D28": "Last 28 Days",
+        "D30": "Last 28 Days",
+        "D90": "Last 90 Days",
+        "D180": "Last 180 Days",
+    }
+    clean_p = period.upper() if period else "D28"
+    period_label = period_labels.get(clean_p, f"Last {clean_p[1:]} Days" if clean_p.startswith("D") else f"Period: {clean_p}")
+
     return {
         "period": period,
+        "period_label": period_label,
         "total_users": total_users,
         "active_users": active_users,
         "inactive_users": inactive_users,
@@ -406,7 +456,11 @@ def generate_html(metrics: Dict[str, Any]) -> str:
     if not inactive_rows:
         inactive_rows = '<tr><td colspan="3" style="padding:14px 10px;text-align:center;color:#15803d;font-size:12px;">All licensed accounts have recorded Copilot activity during this period.</td></tr>'
 
-    trend_html = render_trend_weekly(metrics.get("trend_points", []), total_users=metrics.get("total_users", 30))
+    trend_title, trend_html = render_trend_table(
+        metrics.get("trend_points", []),
+        period=metrics.get("period", "D28"),
+        total_users=metrics.get("total_users", 30)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -418,7 +472,7 @@ def generate_html(metrics: Dict[str, Any]) -> str:
 <div style="max-width:680px;margin:0 auto;background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
     <div style="padding:24px 28px;border-bottom:1px solid #e2e8f0;">
         <h1 style="margin:0 0 6px 0;font-size:22px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;">Microsoft 365 Copilot Adoption</h1>
-        <div style="font-size:12px;color:#64748b;">Reporting Window: <strong>Last 28 Days</strong> &bull; Generated {datetime.now().strftime('%d %b %Y, %H:%M')}</div>
+        <div style="font-size:12px;color:#64748b;">Reporting Window: <strong>{metrics.get('period_label', 'Last 28 Days')}</strong> &bull; Generated {datetime.now().strftime('%d %b %Y, %H:%M')}</div>
     </div>
     <div style="padding:24px 28px;">
         <table style="width:100%;margin-bottom:24px;text-align:left;border-collapse:separate;border-spacing:6px 0;">
@@ -451,7 +505,7 @@ def generate_html(metrics: Dict[str, Any]) -> str:
             </tr>
         </table>
 
-        {f'<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">Weekly Activity & Prompt Momentum</div>{trend_html}' if trend_html else ''}
+        {f'<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">{trend_title}</div>{trend_html}' if trend_html else ''}
 
         <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#0f172a;margin:26px 0 10px 0;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">Application Penetration</div>
         {apps_table}
